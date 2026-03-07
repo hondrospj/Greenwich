@@ -5,7 +5,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Sea Bright, NJ — Tidal Flooding Dashboard</title>
+  <title>Greenwich , NJ — Tidal Flooding Dashboard</title>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <!-- Leaflet (map) -->
@@ -921,8 +921,8 @@ a.brand *{
       </div>
 
       <div class="brandTitle">
-        <div class="kicker">USGS 01412150 · Sea Bright, NJ</div>
-        <div class="name">Sea Bright Tidal  Dashboard</div>
+        <div class="kicker">USGS 01412150 · Greenwich , NJ</div>
+        <div class="name">Greenwich  Tidal  Dashboard</div>
       </div>
     </a>
 
@@ -1354,7 +1354,7 @@ const COOPS_INTERVAL="6";
 const COOPS_TZ="gmt";
 
       /* Tide-clock settings for crest-anchored highs (NOAA hilo predictions) */
-const NOAA_STATION_TIDECLOCK = "8537374"; // same station as COOPS_STATION (Sea Bright)
+const NOAA_STATION_TIDECLOCK = "8537374"; // same station as COOPS_STATION (Greenwich )
 const CREST_WINDOW_HOURS = 2;             // search max within ±2 hours of predicted crest
 const REQUIRE_WITHIN_HOURS = 1;           // must have at least one obs point within ±1 hour
 
@@ -1433,7 +1433,7 @@ const TOP_TEN_MLLW = [
     /* =========================
 MAP — Leaflet gauge map
 ========================= */
-const DEFAULT_GAUGE_ID = "04143038"; // Sea Bright USGS
+const DEFAULT_GAUGE_ID = "04143038"; // Greenwich  USGS
 const DEFAULT_GAUGE_ZOOM = 12;       // adjust if you want closer (13 = tighter)
 // Edit these whenever you want (lat/lon + label + link)
 const GAUGES = [
@@ -1526,7 +1526,7 @@ function ensureGaugeMap(){
     bounds.push([g.lat, g.lon]);
   }
 
-// Default view = Sea Bright gauge
+// Default view = Greenwich  gauge
 const def = GAUGES.find(g => String(g.id) === DEFAULT_GAUGE_ID);
 
 if(def){
@@ -2254,11 +2254,11 @@ async function fetchObservedSeries({startISO=null,endISO=null,period=null}={}){
 }
 
 /* =========================
-NOAA/NWS NWPS official forecast (SBIN4) -> we resample to 15-min later
+NOAA/NWS NWPS official forecast (GRWN4) -> we resample to 15-min later
 Replaces CO-OPS predictions block.
 Returns MLLW ft as [{t: ISO8601, ft: Number}] plus issuedTime for UI.
 ========================= */
-const NWPS_GAUGE = "SBIN4";
+const NWPS_GAUGE = "GRWN4";
 const NWPS_STAGEFLOW_URL = `https://api.water.noaa.gov/nwps/v1/gauges/${NWPS_GAUGE}/stageflow`;
 
 /* Clip to N hours from the first point (keeps  existing 72h logic consistent). */
