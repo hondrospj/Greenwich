@@ -1056,15 +1056,15 @@ a.brand *{
     <div class="stages" aria-label="Flood stages">
       <div class="stage">
         <div class="stageName">Minor</div>
-        <div class="badge" id="minorBadge" style="color:var(--minor)">5.20–6.20 ft</div>
+        <div class="badge" id="minorBadge" style="color:var(--minor)">7.20–8.20 ft</div>
       </div>
       <div class="stage">
         <div class="stageName">Moderate</div>
-        <div class="badge" id="moderateBadge" style="color:var(--moderate)">6.20–7.20 ft</div>
+        <div class="badge" id="moderateBadge" style="color:var(--moderate)">8.20–9.20 ft</div>
       </div>
       <div class="stage">
         <div class="stageName">Major</div>
-        <div class="badge" id="majorBadge" style="color:var(--major)">≥ 7.20 ft</div>
+        <div class="badge" id="majorBadge" style="color:var(--major)">≥ 9.20 ft</div>
       </div>
     </div>
   </div>
@@ -1339,31 +1339,34 @@ function fromDisplayToNavd(displayFt){
 }
 
 
+/* =========================================
+   1) Cohancey River at Greenwich
+========================================= */
+
 /* USGS observed (15-min IV). */
-const USGS_SITE="01407600";
+const USGS_SITE="04143038";
 
 /* Water level ONLY (tide elevation NAVD88). */
 const USGS_PARAM_PRIMARY = "72279";
 
 /* NOAA CO-OPS predictions */
-const COOPS_STATION="8531804";
+const COOPS_STATION="8537374";
 const COOPS_APP="cupajoe.live";
 const COOPS_DATUM="MLLW";
 const COOPS_INTERVAL="6";
 const COOPS_TZ="gmt";
 
-      /* Tide-clock settings for crest-anchored highs (NOAA hilo predictions) */
-const NOAA_STATION_TIDECLOCK = "8531804"; // same station as COOPS_STATION (Sea Bright)
-const CREST_WINDOW_HOURS = 2;             // search max within ±2 hours of predicted crest
-const REQUIRE_WITHIN_HOURS = 1;           // must have at least one obs point within ±1 hour
+/* Tide-clock settings for crest-anchored highs (NOAA hilo predictions) */
+const NOAA_STATION_TIDECLOCK = "8537374";
+const CREST_WINDOW_HOURS = 2;
+const REQUIRE_WITHIN_HOURS = 1;
 
-
-/* Flood thresholds (from  table) */
+/* Flood thresholds */
 const THRESH = {
-  MLLW:  { minorLow:5.20, moderateLow:6.20, majorLow:7.20 },
-  NAVD88:{ minorLow:3.10, moderateLow:4.10, majorLow:5.10 },
-  MSL:   { minorLow:3.33, moderateLow:4.33, majorLow:5.33 },
-  MHHW:  { minorLow:1.32, moderateLow:2.32, majorLow:3.32 }
+  MLLW:  { minorLow:7.20, moderateLow:8.20, majorLow:9.20 },
+  NAVD88:{ minorLow:3.93, moderateLow:4.93, majorLow:5.93 },
+  MSL:   { minorLow:4.05, moderateLow:5.05, majorLow:6.05 },
+  MHHW:  { minorLow:0.77, moderateLow:1.77, majorLow:2.77 }
 };
 
       const HOUR_MS = 60 * 60 * 1000;
@@ -1432,7 +1435,7 @@ const TOP_TEN_MLLW = [
     /* =========================
 MAP — Leaflet gauge map
 ========================= */
-const DEFAULT_GAUGE_ID = "01407600"; // Sea Bright USGS
+const DEFAULT_GAUGE_ID = "04143038"; // Sea Bright USGS
 const DEFAULT_GAUGE_ZOOM = 12;       // adjust if you want closer (13 = tighter)
 // Edit these whenever you want (lat/lon + label + link)
 const GAUGES = [
@@ -2253,11 +2256,11 @@ async function fetchObservedSeries({startISO=null,endISO=null,period=null}={}){
 }
 
 /* =========================
-NOAA/NWS NWPS official forecast (SBIN4) -> we resample to 15-min later
+NOAA/NWS NWPS official forecast (GRWN4) -> we resample to 15-min later
 Replaces CO-OPS predictions block.
 Returns MLLW ft as [{t: ISO8601, ft: Number}] plus issuedTime for UI.
 ========================= */
-const NWPS_GAUGE = "SBIN4";
+const NWPS_GAUGE = "GRWN4";
 const NWPS_STAGEFLOW_URL = `https://api.water.noaa.gov/nwps/v1/gauges/${NWPS_GAUGE}/stageflow`;
 
 /* Clip to N hours from the first point (keeps  existing 72h logic consistent). */
