@@ -5,7 +5,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Greenwich , NJ — Tidal Flooding Dashboard</title>
+  <title>Sea Bright, NJ — Tidal Flooding Dashboard</title>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <!-- Leaflet (map) -->
@@ -921,8 +921,8 @@ a.brand *{
       </div>
 
       <div class="brandTitle">
-        <div class="kicker">USGS 01412150 · Greenwich , NJ</div>
-        <div class="name">Greenwich  Tidal  Dashboard</div>
+        <div class="kicker">USGS 01412150 · Sea Bright, NJ</div>
+        <div class="name">Sea Bright Tidal  Dashboard</div>
       </div>
     </a>
 
@@ -1341,20 +1341,20 @@ function fromDisplayToNavd(displayFt){
 
 
 /* USGS observed (15-min IV). */
-const USGS_SITE="04143038";
+const USGS_SITE="01407600";
 
 /* Water level ONLY (tide elevation NAVD88). */
 const USGS_PARAM_PRIMARY = "72279";
 
 /* NOAA CO-OPS predictions */
-const COOPS_STATION="8537374";
+const COOPS_STATION="8531804";
 const COOPS_APP="cupajoe.live";
 const COOPS_DATUM="MLLW";
 const COOPS_INTERVAL="6";
 const COOPS_TZ="gmt";
 
       /* Tide-clock settings for crest-anchored highs (NOAA hilo predictions) */
-const NOAA_STATION_TIDECLOCK = "8537374"; // same station as COOPS_STATION (Greenwich )
+const NOAA_STATION_TIDECLOCK = "8531804"; // same station as COOPS_STATION (Sea Bright)
 const CREST_WINDOW_HOURS = 2;             // search max within ±2 hours of predicted crest
 const REQUIRE_WITHIN_HOURS = 1;           // must have at least one obs point within ±1 hour
 
@@ -1433,7 +1433,7 @@ const TOP_TEN_MLLW = [
     /* =========================
 MAP — Leaflet gauge map
 ========================= */
-const DEFAULT_GAUGE_ID = "04143038"; // Greenwich  USGS
+const DEFAULT_GAUGE_ID = "01407600"; // Sea Bright USGS
 const DEFAULT_GAUGE_ZOOM = 12;       // adjust if you want closer (13 = tighter)
 // Edit these whenever you want (lat/lon + label + link)
 const GAUGES = [
@@ -1455,7 +1455,7 @@ const GAUGES = [
   { name:"Mantoloking (Barnegat Bay at Mantoloking)", agency:"USGS", id:"01408168", lat:40.040556, lon:-74.054444 },
   { name:"Manasquan (Watson Creek at Manasquan)", agency:"USGS", id:"01408048", lat:40.111667, lon:-74.044722 },
   { name:"Belmar (Shark River at Belmar)", agency:"USGS", id:"01407770", lat:40.179167, lon:-74.038333 },
-  { name:"Sea Bright (Shrewsbury River at Sea Bright)", agency:"USGS", id:"04143038", lat:40.365556, lon:-73.974722 },
+  { name:"Sea Bright (Shrewsbury River at Sea Bright)", agency:"USGS", id:"01407600", lat:40.365556, lon:-73.974722 },
   { name:"Keansburg (Raritan Bay at Keansburg)", agency:"USGS", id:"01407081", lat:40.449167, lon:-74.147500 },
 
   // --- NOAA tide gauges ---
@@ -1526,7 +1526,7 @@ function ensureGaugeMap(){
     bounds.push([g.lat, g.lon]);
   }
 
-// Default view = Greenwich  gauge
+// Default view = Sea Bright gauge
 const def = GAUGES.find(g => String(g.id) === DEFAULT_GAUGE_ID);
 
 if(def){
@@ -2254,11 +2254,11 @@ async function fetchObservedSeries({startISO=null,endISO=null,period=null}={}){
 }
 
 /* =========================
-NOAA/NWS NWPS official forecast (GRWN4) -> we resample to 15-min later
+NOAA/NWS NWPS official forecast (SBIN4) -> we resample to 15-min later
 Replaces CO-OPS predictions block.
 Returns MLLW ft as [{t: ISO8601, ft: Number}] plus issuedTime for UI.
 ========================= */
-const NWPS_GAUGE = "GRWN4";
+const NWPS_GAUGE = "SBIN4";
 const NWPS_STAGEFLOW_URL = `https://api.water.noaa.gov/nwps/v1/gauges/${NWPS_GAUGE}/stageflow`;
 
 /* Clip to N hours from the first point (keeps  existing 72h logic consistent). */
