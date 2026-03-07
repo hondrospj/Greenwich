@@ -280,7 +280,7 @@ async function main() {
   if (!THRESH_NAVD88) {
     die(
       "Missing NAVD88 thresholds. Add thresholdsNAVD88 to data/peaks_navd88.json, e.g.\n" +
-      '  "thresholdsNAVD88": {"minorLow": 4.19, "moderateLow": 5.19, "majorLow": 6.19}\n'
+      '  "thresholdsNAVD88": {"minorLow": 3.93, "moderateLow": 4.93, "majorLow": 5.93}\n'
     );
   }
 
