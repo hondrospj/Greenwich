@@ -1,14 +1,15 @@
 {
-  "site": "01407600",
+  "site": "01413038",
   "parameterCd": "72279",
   "datum": "NAVD88",
   "peakMinSepMinutes": 300,
   "thresholdsNAVD88": {
-    "minorLow": 3.10,
-    "moderateLow": 4.10,
-    "majorLow": 5.10
+    "minorLow": 3.93,
+    "moderateLow": 4.93,
+    "majorLow": 5.93
   },
   "method": "crest_anchored_highs_v1",
   "lastProcessedISO": "2000-01-01T00:00:00Z",
   "events": []
 }
+
