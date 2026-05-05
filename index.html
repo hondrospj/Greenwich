@@ -640,26 +640,6 @@ OBVIOUS DATUM DROPDOWN
       margin-top:6px;
     }
 
-    .floodAudit{
-      margin-top:10px;
-      padding:10px 12px;
-      border:1px solid var(--line);
-      background:rgba(0,0,0,.14);
-      border-radius:14px;
-      color:var(--muted);
-      font-size:12.5px;
-      line-height:1.35;
-      text-align:center;
-    }
-    .floodAudit b{color:var(--text);font-weight:950}
-    .floodAudit .auditMini{
-      display:flex;
-      flex-wrap:wrap;
-      justify-content:center;
-      gap:8px 14px;
-      margin-top:6px;
-    }
-    .floodAudit .auditMini span{white-space:nowrap}
 
     .event{
       border:1px solid var(--line);
@@ -1069,10 +1049,6 @@ a.brand *{
             </div>
             <div class="eventBadge" style="color:var(--muted)">—</div>
           </div>
-        </div>
-
-        <div class="floodAudit" id="f72HourAudit">
-          <b>Exact flood-hour count:</b> waiting for forecast…
         </div>
 
         <div class="rangeMeta" id="f48Meta">—</div>
@@ -1649,7 +1625,6 @@ const f48ModerHrsEl = $("f48ModerHrs");
 const f48MajorHrsEl = $("f48MajorHrs");
 const f48ListEl     = $("f48List");
 const f48MetaEl     = $("f48Meta");
-const f72HourAuditEl = $("f72HourAudit");
 
  const datumSelect = $("datumSelect");
 // =========================
@@ -2097,26 +2072,6 @@ function buildExactFloodAccounting(rawPoints, t0, t1){
   return out;
 }
 
-function updateFloodHourAudit(accounting, t0, t1){
-  if(!f72HourAuditEl) return;
-
-  const msToHours = ms => ms / 3600000;
-  const minor = msToHours(accounting.minorMs);
-  const moderate = msToHours(accounting.moderateMs);
-  const major = msToHours(accounting.majorMs);
-  const total = minor + moderate + major;
-
-  f72HourAuditEl.innerHTML = `
-    <b>Exact flood-hour count:</b> ${total.toFixed(1)} total hrs
-    <div class="auditMini">
-      <span style="color:var(--minor)">Minor ${minor.toFixed(1)} hrs</span>
-      <span style="color:var(--moderate)">Moderate ${moderate.toFixed(1)} hrs</span>
-      <span style="color:var(--major)">Major ${major.toFixed(1)} hrs</span>
-    </div>
-    <div style="margin-top:5px;">Counted from ${fmtESTTime(isoFromMs(t0))} to ${fmtESTTime(isoFromMs(t1))} using threshold-crossing interpolation.</div>
-  `;
-}
-
 function updateFloodOutlook48(){
   if(!f48MinorHrsEl || !f48ModerHrsEl || !f48MajorHrsEl || !f48ListEl || !f48MetaEl) return;
 
@@ -2133,7 +2088,6 @@ function updateFloodOutlook48(){
         </div>
         <div class="eventBadge" style="color:var(--muted)">—</div>
       </div>`;
-    if(f72HourAuditEl) f72HourAuditEl.innerHTML = `<b>Exact flood-hour count:</b> unavailable because no forecast points loaded.`;
     f48MetaEl.textContent = "";
     return;
   }
@@ -2161,7 +2115,6 @@ function updateFloodOutlook48(){
   f48MinorHrsEl.textContent = msToHours(accounting.minorMs).toFixed(1);
   f48ModerHrsEl.textContent = msToHours(accounting.moderateMs).toFixed(1);
   f48MajorHrsEl.textContent = msToHours(accounting.majorMs).toFixed(1);
-  updateFloodHourAudit(accounting, t0, t1);
 
   const segs = accounting.segments;
 
