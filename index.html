@@ -2273,6 +2273,41 @@ async function fetchObservedSeries({startISO=null,endISO=null,period=null}={}){
   return extractWaterLevelSeries_NAVD88(j);
 }
 
+
+/* Fetch recent observed values without asking USGS for a huge YTD window.
+   The old page requested Jan 1 -> now every load. By early May that can exceed
+   the practical IV-service window and make the whole live card fail.
+   This tries short windows first, then falls back far enough to show the most
+   recent available reading if the gauge feed is temporarily stale. */
+async function fetchRecentObservedSeriesWithFallback(){
+  const tries = ["P7D", "P30D", "P120D"];
+  const errs = [];
+
+  for(const period of tries){
+    try{
+      const pts = await fetchObservedSeries({ period });
+      if(pts && pts.length) return pts;
+      errs.push(`${period}: no values`);
+    }catch(e){
+      errs.push(`${period}: ${e?.message || e}`);
+    }
+  }
+
+  throw new Error("No recent USGS tidal elevation data returned. " + errs.join(" | "));
+}
+
+function hoursSinceISO(iso){
+  const t = new Date(iso).getTime();
+  if(!Number.isFinite(t)) return Infinity;
+  return (Date.now() - t) / 3600000;
+}
+
+function sameLocalDayISO(aISO, bISO){
+  const a = getESTParts(new Date(aISO));
+  const b = getESTParts(new Date(bISO));
+  return a.y === b.y && a.m === b.m && a.d === b.d;
+}
+
 /* =========================
 NOAA/NWS NWPS official forecast (GRWN4) -> we resample to 15-min later
 Replaces CO-OPS predictions block.
@@ -3953,63 +3988,74 @@ function countEventsFromHistoryForYear(year){
 LIVE: current conditions + daily range + overwrite current year bar
 ========================= */
 async function updateLiveAndAnnualCounts(){
-  // Build completed-year bars from whatever history is currently loaded
+  // Build completed-year bars from whatever history is currently loaded.
+  // The current year is updated from the daily peaks cache, not by pulling a huge
+  // Jan 1 -> now IV request in the browser.
   buildAnnualArraysFromHistory_completedYears();
   renderAnnual();
 
-  // ---- Live observed series YTD (NAVD88) ----
   const { y: curYear } = getESTParts(new Date());
-  const startISO = startOfYearEST_ISO(curYear);
-  const endISO   = nowISO();
 
-  const ytd = await fetchObservedSeries({ startISO, endISO });
-  if(!ytd.length) throw new Error("no live water-level data returned from USGS");
+  // ---- Current-year flooding bar: history-based (peaks JSON) ----
+  if(Array.isArray(HIGH_TIDES_NAVD) && HIGH_TIDES_NAVD.length){
+    const counts = countEventsFromHistoryForYear(curYear);
+    overwriteCurrentYearBarWithLiveCounts(counts);
+    renderAnnual();
+  }
 
-  STATE.ytdNavd  = ytd;
-  STATE.lastNavd = ytd[ytd.length - 1];
+  // ---- Live/recent observed series (NAVD88) ----
+  // This intentionally uses period-based recent windows. It avoids the May/late-year
+  // failure mode caused by requesting too many 15-minute USGS observations at once.
+  const recent = await fetchRecentObservedSeriesWithFallback();
+  if(!recent.length) throw new Error("no recent water-level data returned from USGS");
+
+  STATE.ytdNavd  = recent;
+  STATE.lastNavd = recent[recent.length - 1];
+
+  const ageHours = hoursSinceISO(STATE.lastNavd.t);
+  const isStale = ageHours > 6;
 
   // ---- Current water level card ----
-curFtEl.textContent = toDisplayFtFromNavd(STATE.lastNavd.ft).toFixed(2);
-curMetaEl.textContent = "Updated: " + fmtESTFull(STATE.lastNavd.t);
-lastPill.textContent  = "Last updated: " + fmtESTFull(STATE.lastNavd.t);
-setStage(STATE.lastNavd.ft);
-setCurrentNumberColorByNavd(STATE.lastNavd.ft);
-  // ---- Daily range (today) ----
-// ---- Daily range (today) ----
-const today = sliceAfter(ytd, startOfTodayLocalTZ_ISO());
-STATE.todayNavd = today;
+  curFtEl.textContent = toDisplayFtFromNavd(STATE.lastNavd.ft).toFixed(2);
+  curMetaEl.textContent = "Updated: " + fmtESTFull(STATE.lastNavd.t);
+
+  if(isStale){
+    lastPill.textContent = "Last USGS reading: " + fmtESTFull(STATE.lastNavd.t);
+    stageTextEl.textContent = "LIVE DATA STALE";
+    stageDotEl.style.background = "var(--minor)";
+    stageDotEl.style.boxShadow = "0 0 0 4px rgba(251,191,36,.18)";
+  }else{
+    lastPill.textContent = "Last updated: " + fmtESTFull(STATE.lastNavd.t);
+    setStage(STATE.lastNavd.ft);
+  }
+
+  setCurrentNumberColorByNavd(STATE.lastNavd.ft);
+
+  // ---- Daily range (today only if today's data actually exists) ----
+  const todayStart = startOfTodayLocalTZ_ISO();
   if(dailyRangeDateEl){
-  dailyRangeDateEl.textContent = fmtNiceDate(startOfTodayLocalTZ_ISO());
-}
+    dailyRangeDateEl.textContent = fmtNiceDate(todayStart);
+  }
 
+  const today = recent.filter(p => sameLocalDayISO(p.t, new Date().toISOString()));
+  STATE.todayNavd = today;
 
-if(today.length){
-  const dmx = maxPoint(today), dmn = minPoint(today);
+  if(today.length){
+    const dmx = maxPoint(today), dmn = minPoint(today);
 
-  dayMaxFtEl.textContent = toDisplayFtFromNavd(dmx.ft).toFixed(2);
-  dayMinFtEl.textContent = toDisplayFtFromNavd(dmn.ft).toFixed(2);
+    dayMaxFtEl.textContent = toDisplayFtFromNavd(dmx.ft).toFixed(2);
+    dayMinFtEl.textContent = toDisplayFtFromNavd(dmn.ft).toFixed(2);
 
-  //   ONLY show the time under each number (EST)
-  if(dayMaxWhenEl) dayMaxWhenEl.textContent = fmtESTTime(dmx.t);
-  if(dayMinWhenEl) dayMinWhenEl.textContent = fmtESTTime(dmn.t);
-
-  //   optional: blank the long meta line so it doesn't “fight” the clean layout
-  if(dayRangeMeta) dayRangeMeta.textContent = "";
-}else{
-  dayMaxFtEl.textContent = "—";
-  dayMinFtEl.textContent = "—";
-  if(dayMaxWhenEl) dayMaxWhenEl.textContent = "—";
-  if(dayMinWhenEl) dayMinWhenEl.textContent = "—";
-  if(dayRangeMeta) dayRangeMeta.textContent = "";
-}
-
-
-
-  // ---- Current-year flooding bar: history-based (peaks list) ----
-  // NOTE: requires HIGH_TIDES_NAVD already loaded (JSON/TXT init)
-  const counts = countEventsFromHistoryForYear(curYear);
-  overwriteCurrentYearBarWithLiveCounts(counts);
-  renderAnnual();
+    if(dayMaxWhenEl) dayMaxWhenEl.textContent = fmtESTTime(dmx.t);
+    if(dayMinWhenEl) dayMinWhenEl.textContent = fmtESTTime(dmn.t);
+    if(dayRangeMeta) dayRangeMeta.textContent = "";
+  }else{
+    dayMaxFtEl.textContent = "—";
+    dayMinFtEl.textContent = "—";
+    if(dayMaxWhenEl) dayMaxWhenEl.textContent = "—";
+    if(dayMinWhenEl) dayMinWhenEl.textContent = "—";
+    if(dayRangeMeta) dayRangeMeta.textContent = isStale ? "USGS feed has no observations for today." : "";
+  }
 }
 
 /* =========================
