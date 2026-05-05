@@ -639,6 +639,28 @@ OBVIOUS DATUM DROPDOWN
       gap:10px;
       margin-top:6px;
     }
+
+    .floodAudit{
+      margin-top:10px;
+      padding:10px 12px;
+      border:1px solid var(--line);
+      background:rgba(0,0,0,.14);
+      border-radius:14px;
+      color:var(--muted);
+      font-size:12.5px;
+      line-height:1.35;
+      text-align:center;
+    }
+    .floodAudit b{color:var(--text);font-weight:950}
+    .floodAudit .auditMini{
+      display:flex;
+      flex-wrap:wrap;
+      justify-content:center;
+      gap:8px 14px;
+      margin-top:6px;
+    }
+    .floodAudit .auditMini span{white-space:nowrap}
+
     .event{
       border:1px solid var(--line);
       background:rgba(0,0,0,.14);
@@ -1047,6 +1069,10 @@ a.brand *{
             </div>
             <div class="eventBadge" style="color:var(--muted)">—</div>
           </div>
+        </div>
+
+        <div class="floodAudit" id="f72HourAudit">
+          <b>Exact flood-hour count:</b> waiting for forecast…
         </div>
 
         <div class="rangeMeta" id="f48Meta">—</div>
@@ -1623,6 +1649,7 @@ const f48ModerHrsEl = $("f48ModerHrs");
 const f48MajorHrsEl = $("f48MajorHrs");
 const f48ListEl     = $("f48List");
 const f48MetaEl     = $("f48Meta");
+const f72HourAuditEl = $("f72HourAudit");
 
  const datumSelect = $("datumSelect");
 // =========================
@@ -1936,32 +1963,158 @@ function stageColorVar(stage){
   return "var(--muted)";
 }
 
-// Build segments of consecutive points where stage >= Minor
-function buildFloodSegments(points){
-  const segs = [];
+// Exact flood-hour math for the 72h outlook.
+// Why this is needed:
+// The old version counted each forecast point as if it represented the full
+// following interval. On hourly forecast data, that can add one extra hour
+// to each flood period. This version counts the time BETWEEN forecast points
+// and linearly interpolates threshold crossings, so the top hour boxes and
+// the listed flood periods use the same math.
+function interpFtAtMs(a, b, ms){
+  const dt = b.ms - a.ms;
+  if(!Number.isFinite(dt) || dt <= 0) return Number(a.ftDisplay);
+  const r = (ms - a.ms) / dt;
+  return a.ftDisplay + r * (b.ftDisplay - a.ftDisplay);
+}
+
+function isoFromMs(ms){
+  return new Date(ms).toISOString();
+}
+
+function stageRank(stage){
+  if(stage === "Major") return 3;
+  if(stage === "Moderate") return 2;
+  if(stage === "Minor") return 1;
+  return 0;
+}
+
+function splitIntervalByFloodThresholds(tA, tB, ftA, ftB){
+  const T = THRESH[DISPLAY_DATUM];
+  const thresholds = [T.minorLow, T.moderateLow, T.majorLow];
+  const cuts = [tA, tB];
+
+  for(const th of thresholds){
+    const dA = ftA - th;
+    const dB = ftB - th;
+
+    // Crossing strictly inside the interval. Endpoints are already represented
+    // by tA/tB, so this avoids duplicate zero-length cuts.
+    if((dA < 0 && dB > 0) || (dA > 0 && dB < 0)){
+      const ratio = (th - ftA) / (ftB - ftA);
+      const tCross = tA + ratio * (tB - tA);
+      if(tCross > tA && tCross < tB) cuts.push(tCross);
+    }
+  }
+
+  cuts.sort((a,b)=>a-b);
+
+  const pieces = [];
+  for(let i=0; i<cuts.length-1; i++){
+    const s = cuts[i];
+    const e = cuts[i+1];
+    if(e <= s) continue;
+
+    const mid = (s + e) / 2;
+    const midFt = ftA + ((mid - tA) / (tB - tA)) * (ftB - ftA);
+    const sFt = ftA + ((s - tA) / (tB - tA)) * (ftB - ftA);
+    const eFt = ftA + ((e - tA) / (tB - tA)) * (ftB - ftA);
+    const stage = stageNameFromDisplayFt(midFt);
+
+    pieces.push({
+      startMs:s,
+      endMs:e,
+      stage,
+      peakFt:Math.max(sFt, eFt, midFt)
+    });
+  }
+  return pieces;
+}
+
+function buildExactFloodAccounting(rawPoints, t0, t1){
+  const out = {
+    minorMs:0,
+    moderateMs:0,
+    majorMs:0,
+    pieces:[],
+    segments:[]
+  };
+
+  const pts = (rawPoints || [])
+    .filter(p => Number.isFinite(p.ms) && Number.isFinite(p.ftDisplay))
+    .sort((a,b)=>a.ms-b.ms);
+
+  if(pts.length < 2) return out;
+
+  for(let i=0; i<pts.length-1; i++){
+    const a = pts[i];
+    const b = pts[i+1];
+    if(b.ms <= t0 || a.ms >= t1) continue;
+
+    const s = Math.max(a.ms, t0);
+    const e = Math.min(b.ms, t1);
+    if(e <= s) continue;
+
+    const ftS = interpFtAtMs(a, b, s);
+    const ftE = interpFtAtMs(a, b, e);
+    const pieces = splitIntervalByFloodThresholds(s, e, ftS, ftE);
+
+    for(const piece of pieces){
+      const dur = piece.endMs - piece.startMs;
+      if(piece.stage === "Major") out.majorMs += dur;
+      else if(piece.stage === "Moderate") out.moderateMs += dur;
+      else if(piece.stage === "Minor") out.minorMs += dur;
+      out.pieces.push(piece);
+    }
+  }
+
+  // Build displayed flood periods from the same pieces used for counting.
   let cur = null;
-
-  for(const p of points){
-    const stage = stageNameFromDisplayFt(p.ftDisplay);
-
-    if(stage === "Below"){
-      if(cur){ segs.push(cur); cur = null; }
+  for(const p of out.pieces){
+    if(p.stage === "Below"){
+      if(cur){ out.segments.push(cur); cur = null; }
       continue;
     }
 
     if(!cur){
-      cur = { startT:p.t, endT:p.t, peakFt:p.ftDisplay, peakStage:stage, startMs:p.ms, endMs:p.ms };
+      cur = {
+        startMs:p.startMs,
+        endMs:p.endMs,
+        peakFt:p.peakFt,
+        peakStage:p.stage
+      };
     }else{
-      cur.endT = p.t;
-      cur.endMs = p.ms;
-      if(p.ftDisplay > cur.peakFt){
-        cur.peakFt = p.ftDisplay;
-        cur.peakStage = stage;
+      cur.endMs = p.endMs;
+      if(p.peakFt > cur.peakFt){
+        cur.peakFt = p.peakFt;
+      }
+      if(stageRank(p.stage) > stageRank(cur.peakStage)){
+        cur.peakStage = p.stage;
       }
     }
   }
-  if(cur) segs.push(cur);
-  return segs;
+  if(cur) out.segments.push(cur);
+
+  return out;
+}
+
+function updateFloodHourAudit(accounting, t0, t1){
+  if(!f72HourAuditEl) return;
+
+  const msToHours = ms => ms / 3600000;
+  const minor = msToHours(accounting.minorMs);
+  const moderate = msToHours(accounting.moderateMs);
+  const major = msToHours(accounting.majorMs);
+  const total = minor + moderate + major;
+
+  f72HourAuditEl.innerHTML = `
+    <b>Exact flood-hour count:</b> ${total.toFixed(1)} total hrs
+    <div class="auditMini">
+      <span style="color:var(--minor)">Minor ${minor.toFixed(1)} hrs</span>
+      <span style="color:var(--moderate)">Moderate ${moderate.toFixed(1)} hrs</span>
+      <span style="color:var(--major)">Major ${major.toFixed(1)} hrs</span>
+    </div>
+    <div style="margin-top:5px;">Counted from ${fmtESTTime(isoFromMs(t0))} to ${fmtESTTime(isoFromMs(t1))} using threshold-crossing interpolation.</div>
+  `;
 }
 
 function updateFloodOutlook48(){
@@ -1980,66 +2133,37 @@ function updateFloodOutlook48(){
         </div>
         <div class="eventBadge" style="color:var(--muted)">—</div>
       </div>`;
+    if(f72HourAuditEl) f72HourAuditEl.innerHTML = `<b>Exact flood-hour count:</b> unavailable because no forecast points loaded.`;
     f48MetaEl.textContent = "";
     return;
   }
 
-// Next 72h window anchored to NOW (not forecast file start)
-const nowMs = Date.now();
-const t0 = nowMs;
-const t1 = nowMs + 72 * 3600 * 1000;
+  // Next 72h window anchored to NOW.
+  const nowMs = Date.now();
+  const t0 = nowMs;
+  const t1 = nowMs + 72 * 3600 * 1000;
 
-
-  // Convert to DISPLAY datum and keep only 48h
-  const pts = pred
+  // Keep all forecast points that can form intervals overlapping the next 72h.
+  // This includes the point just before now if needed for interpolation at t0.
+  const rawPts = pred
     .map(p=>{
       const ms = new Date(p.t).getTime();
       const mllw = Number(p.ft);
       if(!Number.isFinite(ms) || !Number.isFinite(mllw)) return null;
-      if(ms < t0 || ms > t1) return null;
-      const ftDisplay = toDisplayFtFromMllw(mllw);
-      return { t: p.t, ms, ftDisplay };
+      return { t:p.t, ms, ftDisplay:toDisplayFtFromMllw(mllw) };
     })
     .filter(Boolean)
     .sort((a,b)=>a.ms-b.ms);
 
-  if(!pts.length){
-    f48MinorHrsEl.textContent = "0.0";
-    f48ModerHrsEl.textContent = "0.0";
-    f48MajorHrsEl.textContent = "0.0";
-    f48ListEl.innerHTML = `
-      <div class="event">
-        <div class="eventLeft">
-          <div class="eventWhen">No flood periods forecast</div>
-          <div class="eventSub">Next 72 hours stay flooding free</div>
-        </div>
-        <div class="eventBadge" style="color:var(--ok)">Below</div>
-      </div>`;
-    f48MetaEl.textContent = `${fmtNiceDate(pred[0].t)} → ${fmtNiceDate(new Date(t1).toISOString())}`;
-    return;
-  }
-
-  // Count duration in each stage using dt between points
-  let minorMs=0, moderMs=0, majorMs=0;
-
-  for(let i=0;i<pts.length;i++){
-    const a = pts[i];
-    const b = pts[i+1] || null;
-    const dt = b ? Math.max(0, b.ms - a.ms) : 15*60*1000; // assume 15m for last step
-    const stage = stageNameFromDisplayFt(a.ftDisplay);
-
-    if(stage==="Major") majorMs += dt;
-    else if(stage==="Moderate") moderMs += dt;
-    else if(stage==="Minor") minorMs += dt;
-  }
-
+  const accounting = buildExactFloodAccounting(rawPts, t0, t1);
   const msToHours = ms => (ms / 3600000);
-  f48MinorHrsEl.textContent = msToHours(minorMs).toFixed(1);
-  f48ModerHrsEl.textContent = msToHours(moderMs).toFixed(1);
-  f48MajorHrsEl.textContent = msToHours(majorMs).toFixed(1);
 
-  // Build flood segments list
-  const segs = buildFloodSegments(pts);
+  f48MinorHrsEl.textContent = msToHours(accounting.minorMs).toFixed(1);
+  f48ModerHrsEl.textContent = msToHours(accounting.moderateMs).toFixed(1);
+  f48MajorHrsEl.textContent = msToHours(accounting.majorMs).toFixed(1);
+  updateFloodHourAudit(accounting, t0, t1);
+
+  const segs = accounting.segments;
 
   if(!segs.length){
     f48ListEl.innerHTML = `
@@ -2053,8 +2177,8 @@ const t1 = nowMs + 72 * 3600 * 1000;
   }else{
     const show = segs.slice(0,4);
     f48ListEl.innerHTML = show.map(seg=>{
-      const durH = Math.max(0.25, (seg.endMs - seg.startMs) / 3600000);
-      const when = `${fmtNiceDate(seg.startT)} · ${fmtESTTime(seg.startT)} → ${fmtESTTime(seg.endT)}`;
+      const durH = Math.max(0, (seg.endMs - seg.startMs) / 3600000);
+      const when = `${fmtNiceDate(isoFromMs(seg.startMs))} · ${fmtESTTime(isoFromMs(seg.startMs))} → ${fmtESTTime(isoFromMs(seg.endMs))}`;
       const sub  = `${durH.toFixed(1)}h · Peak ${seg.peakFt.toFixed(2)} ${unitText()}`;
       const badgeColor = stageColorVar(seg.peakStage);
 
@@ -2067,10 +2191,21 @@ const t1 = nowMs + 72 * 3600 * 1000;
           <div class="eventBadge" style="color:${badgeColor}">${seg.peakStage}</div>
         </div>`;
     }).join("");
+
+    if(segs.length > show.length){
+      f48ListEl.innerHTML += `
+        <div class="event">
+          <div class="eventLeft">
+            <div class="eventWhen">${segs.length - show.length} additional flood period(s)</div>
+            <div class="eventSub">Included in the hour totals above</div>
+          </div>
+          <div class="eventBadge" style="color:var(--muted)">More</div>
+        </div>`;
+    }
   }
 
-f48MetaEl.textContent =
-  `${fmtNiceDate(new Date(t0).toISOString())} → ${fmtNiceDate(new Date(t1).toISOString())} · Based on NOAA/PETSS`;
+  f48MetaEl.textContent =
+    `${fmtNiceDate(isoFromMs(t0))} → ${fmtNiceDate(isoFromMs(t1))} · Based on NOAA/PETSS`;
 }
 
 function updatePred24RangeCard(){
